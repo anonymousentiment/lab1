@@ -2,7 +2,7 @@
  * CS:APP Data Lab 
  * 
  * <Please put your name and userid here>
- * 
+ * 康逸婷 学号25300730051
  * bits.c - Source file with your solutions to the Lab.
  *          This is the file you will hand in to your instructor.
  *
@@ -452,36 +452,35 @@ unsigned floatScaleThreeHalves(unsigned uf) {
   unsigned frac = uf & 0x7FFFFFu;
   unsigned T, M, e, rnd, sticky;
 
-  if (exp == 0xFF) return uf;            /* Inf or NaN: unchanged */
+  if (exp == 0xFF) return uf;
 
-  if (exp == 0) {                        /* denormal: 3f/2 = (3*frac)*2^-150 */
-    T = (frac << 1) + frac;              /* 3*frac < 2^25 */
-    M = T >> 1;                          /* drop exactly one bit */
-    if ((T & 1) && (M & 1)) M += 1;      /* tie -> round to even */
-    if (M >= (1u << 23))                 /* promoted to normal */
+  if (exp == 0) {
+    T = (frac << 1) + frac;
+    M = T >> 1;
+    if ((T & 1) && (M & 1)) M += 1;
+    if (M >= (1u << 23))
       return sign | (1u << 23) | (M & 0x7FFFFFu);
-    return sign | M;                     /* keeps sign of +/-0 */
+    return sign | M;
   }
 
-  /* normal: value = M0 * 2^(exp-150), M0 = 2^23 | frac */
-  T = (((1u << 23) | frac) << 1) + ((1u << 23) | frac);   /* 3*M0 */
-  if (T & (1u << 25)) {                  /* T >= 2^25: exponent grows */
+  T = (((1u << 23) | frac) << 1) + ((1u << 23) | frac);
+  if (T & (1u << 25)) {
     e = exp + 1;
     M = T >> 2;
-    rnd = (T >> 1) & 1;                  /* round bit */
-    sticky = T & 1;                      /* sticky bit */
+    rnd = (T >> 1) & 1;
+    sticky = T & 1;
   } else {
     e = exp;
     M = T >> 1;
-    rnd = T & 1;                         /* single dropped bit = exact tie */
+    rnd = T & 1;
     sticky = 0;
   }
   if (rnd && (sticky || (M & 1))) M += 1;
-  if (M & (1u << 24)) {                  /* mantissa rounded up to 2^24 */
+  if (M & (1u << 24)) {
     M >>= 1;
     e += 1;
   }
-  if (e >= 0xFF) return sign | 0x7F800000u;   /* overflow -> Inf */
+  if (e >= 0xFF) return sign | 0x7F800000u;
   return sign | (e << 23) | (M & 0x7FFFFFu);
 }
 
@@ -498,7 +497,29 @@ unsigned floatScaleThreeHalves(unsigned uf) {
  *   Rating: 10
  */
 unsigned floatRoundEven(unsigned uf) {
-  return 16;
+  unsigned sign = uf & 0x80000000u;
+  unsigned exp = (uf >> 23) & 0xFFu;
+  unsigned frac = uf & 0x7FFFFFu;
+  unsigned M, sh, I, F, rnd, sticky, N, E;
+
+  if (exp == 0xFF) return uf;
+  if (exp == 0)    return sign;
+  if (exp < 126)   return sign;
+  if (exp >= 150)  return uf;
+
+  M = (1u << 23) | frac;
+  sh = 150 - exp;
+  I = M >> sh;
+  F = M & ((1u << sh) - 1u);
+  rnd = (F >> (sh - 1)) & 1u;
+  sticky = F & ((1u << (sh - 1)) - 1u);
+  N = I;
+  if (rnd && (sticky || (N & 1))) N += 1;
+
+  if (N == 0) return sign;
+  E = 23;
+  while (!(N & (1u << E))) E--;
+  return sign | ((E + 127u) << 23) | ((N << (23 - E)) - (1u << 23));
 }
 
 // P17
@@ -512,7 +533,35 @@ unsigned floatRoundEven(unsigned uf) {
  *   Rating: 10
  */
 unsigned float_i2f(int x) {
-  return 17;
+  unsigned sign = 0, ax, E, shift, hi, lo, rnd, sticky, mant, mask;
+
+  if (x == 0) return 0;
+  if (x < 0) {
+    sign = 1u << 31;
+    ax = -x;
+  } else {
+    ax = x;
+  }
+  E = 31;
+  while (!(ax >> E)) E--;
+
+  if (E <= 23) {
+    mant = ax << (23 - E);
+  } else {
+    shift = E - 23;
+    hi = ax >> shift;
+    mask = (1u << shift) - 1u;
+    lo = ax & mask;
+    rnd = (lo >> (shift - 1)) & 1u;
+    sticky = lo & (mask >> 1);
+    mant = hi;
+    if (rnd && (sticky || (mant & 1))) mant += 1;
+    if (mant >> 24) {
+      E += 1;
+      mant >>= 1;
+    }
+  }
+  return sign | ((E + 127) << 23) | (mant & ((1u << 23) - 1u));
 }
 
 
@@ -526,7 +575,21 @@ unsigned float_i2f(int x) {
  *   Rating: 10
  */
 int bitCount(int x) {
-  return 18;
+  int mask01, mask02, mask04, r;
+
+  mask01 = (0x55 | (0x55 << 8));
+  mask01 = mask01 | (mask01 << 16);
+  mask02 = (0x33 | (0x33 << 8));
+  mask02 = mask02 | (mask02 << 16);
+  mask04 = (0x0F | (0x0F << 8));
+  mask04 = mask04 | (mask04 << 16);
+
+  r = (x & mask01) + ((x >> 1) & mask01);
+  r = (r & mask02) + ((r >> 2) & mask02);
+  r = (r + (r >> 4)) & mask04;
+  r = r + (r >> 8);
+  r = r + (r >> 16);
+  return r & 0x3F;
 }
 
 // P19
@@ -540,5 +603,17 @@ int bitCount(int x) {
  */
 int bitReverse(int x)
 {
-  return 19;
+  int m16,m8,m4,m2,m1;
+  m16=(0xFF|(0xFF<<8));
+  m8=m16^(m16 <<8);
+  m4=m8^(m8 <<4);
+  m2=m4^(m4 <<2);
+  m1=m2^(m2 <<1);
+
+  x=(x<<16)|((x>>16)& m16);
+  x=((x&m8)<<8)|((x>>8)& m8);
+  x=((x&m4)<<4)|((x>>4)& m4);
+  x=((x&m2)<<2)|((x>>2)& m2);
+  x=((x&m1)<<1)|((x>>1)& m1); 
+  return x;
 }
