@@ -145,8 +145,9 @@ NOTES:
  *   Max ops: 2
  *   Rating: 1
  */
+/*把1左移31位*/
 int signMask(void) {
-  return 1;
+  return 1<<31;
 }
 
 // P2
@@ -157,8 +158,9 @@ int signMask(void) {
  *   Max ops: 8
  *   Rating: 2
  */
+/*用按位取反和按位与实现异或，令A为x0y1，B为x1y0，非-非A且非B*/
 int bitXor(int x, int y) {
-	return 2;
+	return ~(~(~x&y)&~(x&~y));
 }
 
 // P3
@@ -169,8 +171,11 @@ int bitXor(int x, int y) {
  *   Max ops: 6
  *   Rating: 3
  */
+/*x右移31位，若为正数则mask为全0，相与为0；若为负数则mask全1，补码做相反数相与*/
 int negativePart(int x){
-  return 3;
+  int mask;
+  mask=x>>31;
+  return mask & (~x+1);
 }
 
 
@@ -184,8 +189,14 @@ int negativePart(int x){
  *   Max ops: 12
  *   Rating: 4
  */
+/*x右移，取src字节和0xff按位与至最低位，左移至dst，mask取反清除原字节，按位或写入新字节*/
 int copyByteWithin(int x, int src, int dst) {
-  return 4;
+  int shiftSrc,shiftDst,byte,mask;
+  shiftSrc=src<<3;
+  shiftDst=dst<<3;
+  byte=(x>>shiftSrc)&0xff;
+  mask=~(0xff<<shiftDst);
+  return(x&mask)|(byte<<shiftDst);
 }
 
 // P5
@@ -197,8 +208,11 @@ int copyByteWithin(int x, int src, int dst) {
  *   Max ops: 20
  *   Rating: 4
  */
+/*算数右移，负数高位填充1，最高位向右挪n位使前n+1位为1，左移1位使高n位均为1，取反使高n位为0低位为1，相与清除高位1*/
 int logicalShift(int x, int n) {
-  return 5;
+  int shifted=x>>n;
+  int mask=~(((1<<31)>>n)<<1);
+  return shifted&mask;
 }
 
 // P6
@@ -209,8 +223,14 @@ int logicalShift(int x, int n) {
  *   Max ops: 18
  *   Rating: 4
  */
+/*取出每个字节高4位,右移4位后&mask0F，清除算术右移产生的高位1，保留每个字节低4位，和low4合并*/
 int swapNibblePairs(int x) {
-  return 6;
+  int m=(0x0F<<8)|0x0F;
+  int mask0F=(m<<16)|m;
+  int maskF0=mask0F<<4;
+  int low4=(x&mask0F)<<4;
+  int high4=((x&maskF0)>>4)&mask0F;
+  return low4|high4;
 }
 
 // P7
@@ -222,8 +242,12 @@ int swapNibblePairs(int x) {
  *   Max ops: 8
  *   Rating: 4
  */
+/*令最低的0bit掩码置1，再重新找到最低0*/
 int secondLowestZeroBit(int x) {
-  return 7;
+  int zero1, zero2;
+  zero1=~x&(x+1);
+  zero2=~(x|zero1)&((x|zero1)+1);
+  return zero2;
 }
 
 // P8
@@ -235,8 +259,15 @@ int secondLowestZeroBit(int x) {
  *   Max ops: 56
  *   Rating: 5
  */
+/*高位和低位异或，可以把两半的1奇偶信息压缩至低位，折叠至最低位，保存整个数字1个数的奇偶*/
 int oddParity(int x) {
-  return 8;
+  int res;
+  res=x^(x>>16);
+  res=res^(res>>8);
+  res=res^(res>>4);
+  res=res^(res>>2);
+  res=res^(res>>1);
+  return !(res&1);
 }
 
 // P9
@@ -248,8 +279,15 @@ int oddParity(int x) {
  *   Max ops: 16
  *   Rating: 5
  */
+/*计算移位数s，次数n和31按位与限制范围，原数x左移shift位，提取最右侧s个放到高位记为tail，原数x右移s位得到head，掩码清除head中多余高位1，head和tail按位或并拼接*/
 int rotateRightBits(int x, int n) {
-  return 9;
+  int s=n&31;
+  int shift=32 + ~s + 1;
+  int tail=x<<shift;
+  int head=x>>s;
+  int mask=(~0<<shift);
+  head=head&~mask;
+  return head|tail;
 }
 
 // P10
@@ -263,8 +301,19 @@ int rotateRightBits(int x, int n) {
  *   Max ops: 24
  *   Rating: 5
  */
+/*x拆分为除以2^n的商与低n位余数,若余数大于2^n-1则商加1；若余数等于，商为奇数则加1；余数小于则商不变，商左移n位*/
 int roundEvenPow2(int x, int n) {
-  return 10;
+  int half = 1 << (n + ~0);
+  int mask = (1 << n) + ~0;
+  int low = x & mask;
+  int quo = x >> n;
+  int isMid = !(low ^ half);
+  int highBit =!!(low & half);
+  int lowerBits = !!(low & (~half));
+  int carry = highBit & lowerBits;
+  int needUp = carry | (isMid & (quo & 1));
+  int res = (quo + needUp) << n;
+  return res;
 }
 
 // P11
@@ -279,8 +328,20 @@ int roundEvenPow2(int x, int n) {
  *   Max ops: 32
  *   Rating: 5
  */
+/*算出向下取整的无溢出中点，当x+y是奇数且x大于y，结果加1，实现小数向x舍入*/
 int midpointTowardFirst(int x, int y) {
-  return 11;
+  int hi=x&y;
+  int lo=x^y;
+  int m=hi+(lo>>1);
+  int odd=lo&1;
+  int xs=x>>31;
+  int ys=y>>31;
+  int diffS=xs^ys;
+  int sub=x+(~y);
+  int subSign=sub>>31;
+  int cmp=(diffS& ~xs)|((~diffS)& ~subSign);
+  int xGtY=cmp<<31>>31;
+  return m+(odd&xGtY);
 }
 
 
@@ -293,8 +354,28 @@ int midpointTowardFirst(int x, int y) {
  *   Max ops: 48
  *   Rating: 7
  */
+/*判断x是否在ab之间，算数右移，依次实现4次小于等于判断，若符号相同则位运算等价计算差值的符号，做与运算判断是否在区间内，或运算返回结果*/
 int isBetweenEitherOrder(int x, int a, int b) {
-  return 12;
+  int sx = x >> 31;
+  int sa = a >> 31;
+  int sb = b >> 31;
+
+  int diffAX = sa ^ sx;
+  int leAX = (diffAX & sa) | (!diffAX & !((x + ~a + 1) >> 31));
+
+    // le(x,b) : x <= b
+  int diffXB = sx ^ sb;
+  int leXB = (diffXB & sx) | (!diffXB & !((b + ~x + 1) >> 31));
+
+    // le(b,x) : b <= x
+  int diffBX = sb ^ sx;
+  int leBX = (diffBX & sb) | (!diffBX & !((x + ~b + 1) >> 31));
+
+    // le(x,a) : x <= a
+  int diffXA = sx ^ sa;
+  int leXA = (diffXA & sx) | (!diffXA & !((a + ~x + 1) >> 31));
+
+  return !!( (leAX & leXB) | (leBX & leXA) );
 }
 
 // P13
@@ -306,8 +387,19 @@ int isBetweenEitherOrder(int x, int a, int b) {
  *   Max ops: 30
  *   Rating: 7
  */
+/*将5x拆成独立判断溢出的三步相加，每一步都能单独判断是否溢出，三次加法共用三个溢出标志，任意一个为1即5x超出范围，此时正数饱和到 INT_MAX，负数饱和到 INT_MIN；均无溢出则返回真实乘积。。*/
 int mul5Sat(int x) {
-  return 13;
+  int x2=x+x;
+  int x4=x2+x2;
+  int p=x4+x;
+  int ovf1=(x^x2)>>31;
+  int ovf2=(x2^x4)>>31;
+  int ovf3=((x4^p)&(x^p))>>31;
+  int ovf=(ovf1|ovf2)|ovf3;
+  int s=x>>31;
+  int mx=~(1<<31);
+  int sat=mx+(s&1);
+  return (ovf&sat)|(~ovf&p);
 }
 
 // P14
@@ -319,8 +411,26 @@ int mul5Sat(int x) {
  *   Max ops: 52
  *   Rating: 7
  */
+/*把32位数拆成高低两块，做无中间溢出的精确求和*/
 int classifyAdd3(int x, int y, int z) {
-  return 14;
+  int mask = (1 << 16) + ~0;
+  int xl = x & mask;
+  int yl = y & mask;
+  int zl = z & mask;
+  int lo = (xl + yl) + zl;
+  int c = lo >> 16;
+  int X = x >> 16;
+  int Y = y >> 16;
+  int Z = z >> 16;
+  int hi = ((X + Y) + Z) + c;
+  int c15 = 1 << 15;
+  int d = hi + (~c15 + 1);
+  int e = hi + c15;
+  int sd = d >> 31;
+  int se = e >> 31;
+  int posv = (~sd) & 1;
+  int negv = se & 1;
+  return posv + ~negv + 1;
 }
 
 // P15
@@ -337,7 +447,42 @@ int classifyAdd3(int x, int y, int z) {
  *   Rating: 7
  */
 unsigned floatScaleThreeHalves(unsigned uf) {
-  return 15;
+  unsigned sign = uf & 0x80000000u;
+  unsigned exp = (uf >> 23) & 0xFFu;
+  unsigned frac = uf & 0x7FFFFFu;
+  unsigned T, M, e, rnd, sticky;
+
+  if (exp == 0xFF) return uf;            /* Inf or NaN: unchanged */
+
+  if (exp == 0) {                        /* denormal: 3f/2 = (3*frac)*2^-150 */
+    T = (frac << 1) + frac;              /* 3*frac < 2^25 */
+    M = T >> 1;                          /* drop exactly one bit */
+    if ((T & 1) && (M & 1)) M += 1;      /* tie -> round to even */
+    if (M >= (1u << 23))                 /* promoted to normal */
+      return sign | (1u << 23) | (M & 0x7FFFFFu);
+    return sign | M;                     /* keeps sign of +/-0 */
+  }
+
+  /* normal: value = M0 * 2^(exp-150), M0 = 2^23 | frac */
+  T = (((1u << 23) | frac) << 1) + ((1u << 23) | frac);   /* 3*M0 */
+  if (T & (1u << 25)) {                  /* T >= 2^25: exponent grows */
+    e = exp + 1;
+    M = T >> 2;
+    rnd = (T >> 1) & 1;                  /* round bit */
+    sticky = T & 1;                      /* sticky bit */
+  } else {
+    e = exp;
+    M = T >> 1;
+    rnd = T & 1;                         /* single dropped bit = exact tie */
+    sticky = 0;
+  }
+  if (rnd && (sticky || (M & 1))) M += 1;
+  if (M & (1u << 24)) {                  /* mantissa rounded up to 2^24 */
+    M >>= 1;
+    e += 1;
+  }
+  if (e >= 0xFF) return sign | 0x7F800000u;   /* overflow -> Inf */
+  return sign | (e << 23) | (M & 0x7FFFFFu);
 }
 
 // P16
